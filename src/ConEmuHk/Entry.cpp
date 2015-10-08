@@ -511,6 +511,15 @@ wrap:
 	return gpConInfo;
 }
 
+CESERVER_CONSOLE_APP_MAPPING* GetAppMapPtr()
+{
+	if (!ghConWnd)
+		return NULL;
+	if (!gpAppMap && !GetConMap())
+		return NULL;
+	return gpAppMap->Ptr();
+}
+
 void OnConWndChanged(HWND ahNewConWnd)
 {
 	//BOOL lbForceReopen = FALSE;
@@ -1661,12 +1670,13 @@ BOOL DllMain_ProcessAttach(HANDLE hModule, DWORD  ul_reason_for_call)
 		{
 			gEvtThreadRoot.nErrCode = GetLastError();
 			// Event has not been created or is inaccessible
+			CESERVER_CONSOLE_APP_MAPPING* pAppMap = GetAppMapPtr();
+			if (pAppMap && pAppMap->HookedPids.HasValue(GetCurrentProcessId()))
+			{
+				bCurrentThreadIsMain = true;
+			}
 		}
 	}
-
-	// When calling Attach (Win+G) from ConEmu GUI
-	gbForceStartPipeServer = (!bCurrentThreadIsMain);
-	_ASSERTE(!gbForceStartPipeServer || (lstrcmpi(gsExeName,L"ls.exe") != 0))
 
 	if (!gbSelfIsRootConsoleProcess && !gbConEmuCProcess)
 	{
@@ -1714,6 +1724,10 @@ BOOL DllMain_ProcessAttach(HANDLE hModule, DWORD  ul_reason_for_call)
 	if (!bCurrentThreadIsMain)
 		gStartedThreads.Set(GetCurrentThreadId(), TRUE);
 	DLOGEND1();
+
+	// When calling Attach (Win+G) from ConEmu GUI
+	gbForceStartPipeServer = (!bCurrentThreadIsMain);
+	_ASSERTE(!gbForceStartPipeServer || (lstrcmpi(gsExeName, L"ls.exe") != 0))
 
 	DLOG1_("DllMain.InQueue",ul_reason_for_call);
 	//gcchLastWriteConsoleMax = 4096;

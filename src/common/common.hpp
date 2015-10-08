@@ -1450,6 +1450,44 @@ struct CESERVER_CONSOLE_MAPPING_HDR
 	ConEmuComspec ComSpec;
 };
 
+// !!! First DWORD/LONG of VAL_T **must** be a hash of value !!!
+// !!! VAL_C must be power of 2 !!!
+template<typename VAL_T, LONG VAL_C>
+struct CIRCULAR_ARRAY
+{
+	// InterlockedIncrement'ed index
+	LONG  nIndex;
+	// Zero values are not accepted
+	VAL_T Values[VAL_C];
+	// Helpers
+	void AddValue(const VAL_T& val)
+	{
+		_ASSERTE(sizeof(val) >= sizeof(LONG));
+		LONG lIdx = (InterlockedIncrement(&nIndex) - 1) & (VAL_C - 1);
+		// ‘Old’ values are expected to be overwritten
+		Values[lIdx] = val;
+	};
+	bool HasValue(const VAL_T& val)
+	{
+		LONG hash = *((LONG*)&val);
+		for (LONG i = 0; i < VAL_C; i++)
+		{
+			if (*(LONG*)(Values + i) == hash)
+				return true;
+		}
+		return false;
+	};
+	void DelValue(const VAL_T& val)
+	{
+		LONG hash = *((LONG*)&val);
+		for (LONG i = 0; i < VAL_C; i++)
+		{
+			if (InterlockedCompareExchange((LONG*)(Values + i), 0, hash) == hash)
+				break;
+		}
+	};
+};
+
 // CECONAPPMAPNAME
 struct CESERVER_CONSOLE_APP_MAPPING
 {
@@ -1469,6 +1507,12 @@ struct CESERVER_CONSOLE_APP_MAPPING
 
 	// Reserved for in-console states
 	DWORD nConsoleFlags;
+
+	// CECONEMUROOTTHREAD often fails on cygwin/msys fork
+	// This will be more proper way to detect if ConEmuHk
+	// is loaded in main thread and snapshooting in the
+	// GetMainThreadId is not required
+	CIRCULAR_ARRAY<DWORD,256> HookedPids;
 };
 
 struct TOPLEFTCOORD
